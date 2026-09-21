@@ -1,32 +1,28 @@
-# Figure Cutout Architecture
+# Architecture
 
-## 1. Design Goal
+## Runtime
 
-초기에는 로컬 머신의 GPU/CPU를 적극 활용한다. 다만 코드 구조는 추후 API 서버, queue, GPU worker, object storage로 확장 가능해야 한다.
-
-핵심은 **로컬 구현과 배포 구현이 동일한 도메인 인터페이스를 사용하도록 하는 것**이다.
-
-## 2. Logical Architecture
+Initial local setup:
 
 ```text
 CLI / API
    │
    ▼
-Application Service
+Application Layer
    │
    ▼
 FigureCutoutPipeline
    ├── Detector
    ├── Segmenter
    ├── Policy
-   ├── Refiner
+   ├── MaskRefiner
    └── QualityEvaluator
    │
    ▼
-Storage
+LocalStorage
 ```
 
-서비스 모드에서는 다음으로 확장한다.
+Service mode:
 
 ```text
 Client
@@ -36,26 +32,24 @@ FastAPI
   │
   ├── Job Store
   └── Queue
-         │
-         ▼
+        │
+        ▼
     GPU Worker
-         │
-         ▼
- FigureCutoutPipeline
-         │
-         ▼
-      Storage
+        │
+        ▼
+FigureCutoutPipeline
+        │
+        ▼
+     Storage
 ```
 
-## 3. Local-first Runtime
-
-초기 권장 실행:
+## Local Development
 
 ```text
-Host OS
-├── Python application
+Host
+├── Python
 ├── PyTorch / CUDA
-├── GPU inference worker
+├── inference worker
 └── local filesystem
 
 Optional Docker
@@ -63,64 +57,20 @@ Optional Docker
 └── Redis
 ```
 
-ML iteration 속도를 위해 GPU runtime을 반드시 Docker 안에 넣을 필요는 없다.
+GPU runtime may stay on the host during early model iteration.
 
-## 4. ML Component Contracts
+## ML Contracts
 
-### Detector
+| Component | Input | Output |
+|---|---|---|
+| Detector | image | bbox, label, confidence |
+| Segmenter | image, detection/prompt | mask, confidence |
+| MaskRefiner | image, raw mask | refined mask |
+| QualityEvaluator | image, detection, mask | score, fallback flag, reasons |
 
-입력:
+## Benchmark
 
-- image
-
-출력:
-
-- bbox
-- confidence
-- label
-
-### Segmenter
-
-입력:
-
-- image
-- optional bbox/prompt
-
-출력:
-
-- mask
-- confidence
-
-### MaskRefiner
-
-입력:
-
-- image
-- raw mask
-
-출력:
-
-- refined mask
-
-### QualityEvaluator
-
-입력:
-
-- image
-- detection
-- mask
-
-출력:
-
-- normalized score
-- review/fallback 여부
-- reason list
-
-## 5. Benchmark Specification
-
-벤치마크는 모델 품질과 실행 성능을 함께 측정한다.
-
-### Required metadata
+Required metadata:
 
 ```json
 {
@@ -133,35 +83,25 @@ ML iteration 속도를 위해 GPU runtime을 반드시 Docker 안에 넣을 필�
 }
 ```
 
-### Performance metrics
+Performance metrics:
 
-- total elapsed time
+- elapsed time
 - mean latency
-- p50 latency
-- p95 latency
+- p50 / p95 latency
 - images/sec
-- optional GPU peak memory
+- peak GPU memory when available
 
-### Quality metrics
-
-Ground truth가 있을 경우:
+Quality metrics:
 
 - IoU
 - Dice
 - Boundary F-score
+- foreground completeness
+- background leakage
+- base policy accuracy
+- accessory policy accuracy
 
-도메인 평가를 추가할 경우:
-
-- body completeness
-- base inclusion accuracy
-- accessory inclusion accuracy
-- background leakage rate
-
-## 6. Benchmark Dataset Rules
-
-validation/test dataset은 모델 실험 중 임의로 섞지 않는다.
-
-권장 구조:
+## Dataset
 
 ```text
 datasets/
@@ -175,11 +115,11 @@ datasets/
         └── test.txt
 ```
 
-실험 로그에는 반드시 dataset/version 또는 commit/hash를 남긴다.
+Validation/test splits must remain stable across model comparisons.
 
-## 7. Storage Layout
+## Storage
 
-초기 LocalStorage:
+Local layout:
 
 ```text
 data/
@@ -189,7 +129,7 @@ data/
 └── debug/
 ```
 
-debug artifact 예시:
+Debug artifacts:
 
 ```text
 debug/<run-id>/
@@ -199,39 +139,32 @@ debug/<run-id>/
 └── metrics.json
 ```
 
-추후 object storage에서도 동일한 logical key 구조를 유지한다.
-
-## 8. Deployment Mapping
+Deployment mapping:
 
 | Local | Deployment |
 |---|---|
 | LocalStorage | S3 / R2 |
-| direct function call | queue |
-| local GPU process | GPU worker instance |
-| JSON/file metadata | PostgreSQL |
+| direct call / local queue | Redis / managed queue |
+| local GPU process | GPU worker |
+| file metadata | PostgreSQL |
 | localhost API | containerized FastAPI |
 
-## 9. Scaling Strategy
+## Scaling
 
-초기에는 vertical scaling을 우선한다.
+Order of optimization:
 
-1. 단일 GPU worker
-2. model warm-load
-3. batch 처리 최적화
-4. CPU preprocessing 병렬화
-5. 필요 시 worker 수평 확장
+1. single warm GPU worker
+2. batch inference
+3. CPU preprocessing parallelism
+4. queue-backed execution
+5. horizontal GPU worker scaling
 
-worker 수평 확장 시 job queue를 공유하고 결과 저장소를 외부화한다.
-
-## 10. Non-goals for Initial Stage
-
-초기에는 다음을 우선하지 않는다.
+## Initial Non-goals
 
 - Kubernetes
 - multi-region
-- autoscaling controller
 - complex event bus
-- microservice 분할 자체
-- premature distributed tracing
+- premature microservice split
+- distributed tracing
 
-먼저 ML 품질, latency, 실패 패턴, 데이터셋 축적 루프를 검증한다.
+Priority: segmentation quality, latency, failure analysis, dataset growth.
