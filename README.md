@@ -25,7 +25,7 @@ Figure Detection
 
 ```text
 figure-cutout/
-├── agent.md
+├── AGENTS.md
 ├── docs/architecture.md
 ├── src/figure_cutout/
 │   ├── api/
@@ -88,4 +88,4 @@ uv run python scripts/benchmark.py   --input-dir datasets/figure-v1/images   --o
 - 모델명은 application logic에 하드코딩하지 않는다.
 - 모델/후처리 변경은 benchmark 결과와 함께 비교한다.
 
-상세 기준은 [agent.md](./agent.md), 구조는 [docs/architecture.md](./docs/architecture.md) 참고.
+상세 기준은 [AGENTS.md](./AGENTS.md), ML 진행 순서는 [docs/ml-roadmap.md](./docs/ml-roadmap.md), 구조는 [docs/architecture.md](./docs/architecture.md) 참고.
