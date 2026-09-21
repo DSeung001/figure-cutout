@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.env
+.DS_Store
+
+# Local runtime data
+data/
+datasets/
+models/
+
+# Keep benchmark result directory but ignore generated reports
+benchmarks/*.json
+!benchmarks/.gitkeep
