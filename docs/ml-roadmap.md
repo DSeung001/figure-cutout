@@ -241,13 +241,13 @@ Keep the previous baseline for comparison.
 
 ## Immediate Implementation Tasks
 
-1. keep the current placeholder pipeline
-2. add a model registry / pipeline selector
-3. add one end-to-end pretrained background-removal baseline
-4. add one promptable segmentation baseline
-5. add one detector + segmenter baseline
-6. extend benchmark JSON with model/device metadata
-7. add debug artifact output
-8. prepare a 50-100 image evaluation set
-9. record failures by category
-10. decide on fine-tuning only after benchmark review
+- [x] keep the current placeholder pipeline
+- [x] add a model registry / pipeline selector
+- [x] add one end-to-end pretrained background-removal baseline (`rembg`, not yet run on real figures)
+- [ ] add one promptable segmentation baseline
+- [ ] add one detector + segmenter baseline
+- [x] extend benchmark JSON with model/device metadata
+- [x] add debug artifact output
+- [~] prepare a 50-100 image evaluation set (synthetic scaffold only; real figures pending)
+- [ ] record failures by category
+- [ ] decide on fine-tuning only after benchmark review

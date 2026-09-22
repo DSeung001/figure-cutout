@@ -17,6 +17,13 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+ml = [
+    "rembg>=2.0",
+    "onnxruntime>=1.17",
+]
+
+[project.scripts]
+figure-cutout = "figure_cutout.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

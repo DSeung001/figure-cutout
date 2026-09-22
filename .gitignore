@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .ruff_cache/
 .env
@@ -12,5 +13,5 @@ datasets/
 models/
 
 # Keep benchmark result directory but ignore generated reports
-benchmarks/*.json
+benchmarks/**/*.json
 !benchmarks/.gitkeep

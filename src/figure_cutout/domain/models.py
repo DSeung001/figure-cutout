@@ -32,8 +32,18 @@ class CutoutOptions:
 
 
 @dataclass(slots=True)
+class PipelineTrace:
+    """Intermediate pipeline outputs kept for debug artifacts."""
+
+    detection: Detection
+    raw_mask: Any
+    refined_mask: Any
+
+
+@dataclass(slots=True)
 class CutoutResult:
     source: Path
     output: Path
     quality: QualityResult
     metadata: dict[str, Any] = field(default_factory=dict)
+    trace: PipelineTrace | None = None

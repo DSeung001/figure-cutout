@@ -32,10 +32,10 @@ figure-cutout/
 │   ├── worker/
 │   ├── domain/
 │   ├── ml/
-│   └── storage/
-├── scripts/
-│   ├── run_cutout.py
-│   └── benchmark.py
+│   ├── storage/
+│   ├── benchmark.py
+│   ├── dataset.py
+│   └── cli.py
 ├── tests/
 ├── benchmarks/
 └── pyproject.toml
@@ -44,41 +44,60 @@ figure-cutout/
 ## 로컬 실행
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra ml
+```
+
+평가셋 스캐폴드(합성 이미지 50장 + metadata, 기존 데이터셋은 `--force` 없이 덮어쓰지 않음):
+
+```bash
+uv run figure-cutout prepare-dataset
+```
+
+등록된 파이프라인 전부 벤치 + debug (한 줄):
+
+```bash
+uv run figure-cutout eval --dataset datasets/figure-v1
 ```
 
 단일 이미지:
 
 ```bash
-uv run python scripts/run_cutout.py   samples/figure.jpg   --output data/results/figure.png
+uv run figure-cutout run samples/figure.jpg --output data/results/figure.png --pipeline rembg
 ```
 
-벤치마크:
+파이프라인 목록:
 
 ```bash
-uv run python scripts/benchmark.py   --input-dir datasets/figure-v1/images   --output benchmarks/local-baseline.json
+uv run figure-cutout list-pipelines
 ```
 
-현재 placeholder pipeline은 orchestration 검증용이다. 실제 모델은 `src/figure_cutout/ml` 인터페이스에 연결한다.
+현재 등록 파이프라인:
+
+| id | 설명 |
+|---|---|
+| `placeholder` | orchestration 검증용 |
+| `rembg` | pretrained background-removal baseline (`uv sync --extra ml`) |
 
 ## Benchmark
 
 기본 기록 항목:
 
 - pipeline / model version
+- dataset / split
+- device
 - image count
 - success / failure
 - mean / p50 / p95 latency
 - throughput
 - runtime environment
+- debug artifact path
 
-추가 품질 지표:
+출력 위치:
 
-- IoU
-- Dice
-- Boundary F-score
-- base policy accuracy
-- accessory policy accuracy
+```text
+benchmarks/<pipeline>/<run-id>.json
+data/debug/<run-id>/
+```
 
 ## 설계 원칙
 

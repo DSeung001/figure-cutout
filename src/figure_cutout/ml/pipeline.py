@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from figure_cutout.domain.models import CutoutOptions, CutoutResult
+from figure_cutout.domain.models import CutoutOptions, CutoutResult, PipelineTrace
 from figure_cutout.ml.contracts import Detector, MaskRefiner, QualityEvaluator, Segmenter
 
 
@@ -72,4 +72,9 @@ class FigureCutoutPipeline:
                 "detection_score": target.score,
                 "segmentation_confidence": segmentation.confidence,
             },
+            trace=PipelineTrace(
+                detection=target,
+                raw_mask=segmentation.mask,
+                refined_mask=mask,
+            ),
         )
