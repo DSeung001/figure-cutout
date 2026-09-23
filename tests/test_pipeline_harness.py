@@ -25,6 +25,11 @@ def test_list_pipelines_includes_placeholder_and_rembg() -> None:
     assert {"placeholder", "rembg"} <= set(list_pipelines())
 
 
+def test_rembg_variants_registered() -> None:
+    assert set(factory_module.REMBG_PIPELINES) <= set(list_pipelines())
+    assert "bria-rmbg" not in factory_module.REMBG_PIPELINES.values()  # non-commercial weights
+
+
 def test_build_unknown_pipeline_raises() -> None:
     with pytest.raises(ValueError, match="Unknown pipeline"):
         build_pipeline("nope")
@@ -121,7 +126,9 @@ def test_cli_eval_exit_codes(
     def _broken() -> object:
         raise ImportError("rembg missing")
 
-    monkeypatch.setitem(factory_module.PIPELINE_REGISTRY, "rembg", _broken)
+    # Isolate the registry so implicit selection never loads real model weights.
+    registry = {"placeholder": factory_module.PIPELINE_REGISTRY["placeholder"], "rembg": _broken}
+    monkeypatch.setattr(factory_module, "PIPELINE_REGISTRY", registry)
     monkeypatch.chdir(tmp_path)
     base = ["eval", "--dataset", str(dataset), "--no-debug"]
     assert main([*base, "--pipeline", "placeholder"]) == 0

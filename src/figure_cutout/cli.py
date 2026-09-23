@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from figure_cutout.benchmark import benchmark_pipeline, eval_pipelines
-from figure_cutout.dataset import prepare_eval_set
+from figure_cutout.compare import compare_runs
+from figure_cutout.dataset import init_real_dataset, prepare_eval_set
 from figure_cutout.ml.factory import DEFAULT_PIPELINE, build_pipeline, list_pipelines
 
 
@@ -72,6 +73,23 @@ def cmd_prepare_dataset(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_init_dataset(args: argparse.Namespace) -> int:
+    _print_json(init_real_dataset(args.dataset))
+    return 0
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    summary = compare_runs(args.dataset, args.pipelines, split=args.split)
+    _print_json(
+        {
+            "output_dir": summary["output_dir"],
+            "review_csv": summary["review_csv"],
+            "pipelines": summary["pipelines"],
+        }
+    )
+    return 0
+
+
 def cmd_list_pipelines(_: argparse.Namespace) -> int:
     print("\n".join(list_pipelines()))
     return 0
@@ -123,6 +141,28 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--seed", type=int, default=42)
     prepare_parser.add_argument("--force", action="store_true", help="Overwrite existing dataset.")
     prepare_parser.set_defaults(func=cmd_prepare_dataset)
+
+    init_parser = sub.add_parser(
+        "init-dataset",
+        help="Index real photos in <dataset>/images: metadata stubs + val split.",
+    )
+    init_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-real-v1"))
+    init_parser.set_defaults(func=cmd_init_dataset)
+
+    compare_parser = sub.add_parser(
+        "compare",
+        help="Side-by-side sheets + review.csv from the latest run of each pipeline.",
+    )
+    compare_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-real-v1"))
+    compare_parser.add_argument(
+        "--pipeline",
+        action="append",
+        dest="pipelines",
+        required=True,
+        help="Pipeline id (repeatable).",
+    )
+    compare_parser.add_argument("--split", default="val")
+    compare_parser.set_defaults(func=cmd_compare)
 
     list_parser = sub.add_parser("list-pipelines", help="List registered pipeline ids.")
     list_parser.set_defaults(func=cmd_list_pipelines)

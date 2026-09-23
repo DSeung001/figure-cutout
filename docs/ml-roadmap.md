@@ -244,10 +244,12 @@ Keep the previous baseline for comparison.
 - [x] keep the current placeholder pipeline
 - [x] add a model registry / pipeline selector
 - [x] add one end-to-end pretrained background-removal baseline (`rembg`, not yet run on real figures)
+- [x] register DIS candidates (BiRefNet, IS-Net) — see [model-candidates.md](./model-candidates.md)
+- [x] add side-by-side compare sheets + review.csv (`figure-cutout compare`)
 - [ ] add one promptable segmentation baseline
 - [ ] add one detector + segmenter baseline
 - [x] extend benchmark JSON with model/device metadata
 - [x] add debug artifact output
-- [~] prepare a 50-100 image evaluation set (synthetic scaffold only; real figures pending)
+- [~] prepare a 50-100 image evaluation set (`datasets/figure-real-v1`, `init-dataset`; photos pending)
 - [ ] record failures by category
 - [ ] decide on fine-tuning only after benchmark review

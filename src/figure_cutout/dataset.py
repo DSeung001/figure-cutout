@@ -210,3 +210,54 @@ def collect_images(dataset: Path, split: str = "val") -> list[Path]:
     if not images:
         raise FileNotFoundError(f"No images for split '{split}' under {dataset}")
     return images
+
+
+def init_real_dataset(root: Path) -> dict[str, object]:
+    """Index user-provided photos: create metadata stubs and a val split without renaming files.
+
+    An existing val split is never rewritten, so earlier benchmark runs stay comparable.
+    """
+    images_dir = root / "images"
+    for path in (images_dir, root / "masks", root / "metadata", root / "splits"):
+        path.mkdir(parents=True, exist_ok=True)
+
+    images = sorted(
+        path.name for path in images_dir.iterdir() if path.suffix.lower() in SUPPORTED_EXTENSIONS
+    )
+
+    created_metadata: list[str] = []
+    for name in images:
+        stem = Path(name).stem
+        meta_path = root / "metadata" / f"{stem}.json"
+        if meta_path.exists():
+            continue
+        meta = {"id": stem, "tags": [], "difficulty": "unknown", "source": "real"}
+        meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+        created_metadata.append(stem)
+
+    val_path = root / "splits" / "val.txt"
+    if val_path.exists():
+        listed = {line.strip() for line in val_path.read_text(encoding="utf-8").splitlines()}
+        unlisted = [name for name in images if name not in listed]
+        split_created = False
+    else:
+        val_path.write_text("".join(f"{name}\n" for name in images), encoding="utf-8")
+        unlisted = []
+        split_created = True
+    for split in ("train", "test"):
+        (root / "splits" / f"{split}.txt").touch()
+
+    manifest_path = root / "manifest.json"
+    if not manifest_path.exists():
+        manifest = {"dataset": root.name, "source": "real", "split": "val"}
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+    return {
+        "dataset": str(root),
+        "image_count": len(images),
+        "metadata_created": created_metadata,
+        "val_split_created": split_created,
+        "unlisted_in_val": unlisted,
+    }
