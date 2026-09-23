@@ -1,6 +1,6 @@
 # Export 데이터셋
 
-`subculture-researcher` 이미지 export(formatVersion 2, [image-export-format.md](./image-export-format.md))를 평가 데이터셋으로 그대로 쓴다. export 파일은 수정하지 않고 옆에 sidecar만 추가한다.
+`subculture-researcher` 이미지 export(formatVersion 4, [image-export-format.md](./image-export-format.md))를 평가 데이터셋으로 그대로 쓴다. export 파일은 수정하지 않고 옆에 sidecar만 추가한다.
 
 ## 경로
 
@@ -18,15 +18,16 @@
 ~/figure_project/exports/<stamp>/
 ├── export.json                 # export 원본 — 수정 금지
 ├── index.json                  # export 원본 — 수정 금지
-├── items/FIGURE_3f2a…c9/00_main.jpg
 ├── manifest.json               # init-dataset 생성: dataset 이름, 필터 설정
 ├── metadata/<key>.json         # tags(수동), auto_tags, item_id, role, title, URL
-├── masks/<key>.png             # 정답 마스크 (Phase 6)
+├── masks/<key>.png             # 정답 마스크 저장 시 생성 (Phase 6)
 └── splits/val.txt              # key 목록
 ```
 
 - sample id = `files[].key` (예: `FIGURE_3f2a…c9-00`). 결과·debug·compare·마스크 파일명 모두 이 값
-- key → 파일 경로는 매번 `index.json`의 `files[].path`로 해석. 폴더를 직접 훑지 않는다
+- key → 파일 경로는 `index.json`의 `storage`/`path`로 해석한다. 폴더를 직접 훑지 않는다.
+- `ok`, `skipped` 모두 평가 대상이다. SHA-256이 같은 샘플은 한 번만 포함한다.
+- metadata/splits는 기록할 파일이 있을 때 생성한다. 초기화는 빈 masks/를 만들지 않는다.
 
 ## 절차
 
@@ -86,11 +87,12 @@ figure-cutout compare --pipeline rembg-birefnet-general
 
 ## 운영 규칙
 
-- `export.json`, `index.json`, `items/`는 수정·삭제 금지
+- 평가에 사용하는 `export.json`, `index.json`, 원본 이미지는 수정·삭제 금지. 공용 원본은 자동 삭제하지 않는다.
 - export마다 새 `<stamp>` 폴더 = 새 데이터셋. 모델 비교는 같은 `<stamp>`에서만 (`--dataset`으로 고정)
 - val split 생성 후 key 삭제·재생성 금지. 구성 변경 = 새 버전
 - train split을 만들 때는 **`item_id` 단위로 분할**. 같은 항목의 main/detail이 train과 val에 나뉘면 누수
-- formatVersion 1 export(`export.json` 없음)는 거부된다. 다시 내보낸다
+- formatVersion 4만 지원한다. 버전이 없거나 다른 export는 새로 내보낸다
+- 두 저장소 연동 확인: `SUBCULTURE_RESEARCHER_DIR=<체크아웃 경로> pytest tests/test_cross_project_export.py` (subculture-researcher의 `.venv` 필요, 미설정 시 건너뜀)
 
 ## 저작권
 

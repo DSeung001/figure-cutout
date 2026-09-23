@@ -117,6 +117,14 @@ datasets/
 
 Validation/test splits must remain stable across model comparisons.
 
+## Shared Originals
+
+`subculture-researcher` writes content-addressed originals to `$FIGURE_PROJECT_DIR/images/<prefix>/<sha256>.<ext>` and v4 export records to `exports/<stamp>/`. The default shared root is `~/figure_project`.
+
+`export_format.py` validates v4 exports and resolves their references; dataset filtering and inference consume resolved paths. No runtime Python dependency on the producer. The shared contract is `docs/image-export-format.md`; output/cache/benchmark locations remain separate.
+
+Directories are created only when writing files. Export sidecars preserve sample keys, manual tags and frozen splits. Originals are never garbage-collected automatically.
+
 ## Storage
 
 Local layout:

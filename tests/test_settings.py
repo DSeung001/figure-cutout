@@ -11,7 +11,7 @@ from figure_cutout.settings import export_dir, figure_project_dir, latest_export
 
 def _export(root: Path) -> Path:
     root.mkdir(parents=True)
-    (root / "export.json").write_text(json.dumps({"formatVersion": 2}), encoding="utf-8")
+    (root / "export.json").write_text(json.dumps({"formatVersion": 4}), encoding="utf-8")
     (root / "index.json").write_text("[]", encoding="utf-8")
     return root
 

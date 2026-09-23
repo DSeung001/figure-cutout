@@ -49,7 +49,7 @@ figure-cutout run photo.jpg --output data/results/photo.png --pipeline rembg-bir
 
 ### 1. export 경로
 
-`subculture-researcher`의 「이미지 다운로드」 / `export_images.py`가 공유 폴더에 export(formatVersion 2)를 만든다. figure-cutout은 같은 폴더를 읽는다.
+`subculture-researcher`의 「이미지 다운로드」 / `export_images.py`가 공유 폴더에 공용 원본(`images/`)과 export 기록(formatVersion 4)을 만든다. figure-cutout은 v4만 읽는다.
 
 ```text
 ~/figure_project/exports/<stamp>/     # export 1개 = 데이터셋 1개 (이름 = <stamp>)
@@ -57,7 +57,7 @@ figure-cutout run photo.jpg --output data/results/photo.png --pipeline rembg-bir
 
 - 경로 변경: 두 저장소의 `.env`에 같은 `FIGURE_PROJECT_DIR` 설정 (`.env.example` 참고)
 - `--dataset`을 생략하면 가장 최근 export를 사용한다
-- export 파일(`export.json`, `index.json`, `items/`)은 수정 금지
+- export 기록(`export.json`, `index.json`)과 참조 원본은 수정 금지
 
 ### 2. 색인
 

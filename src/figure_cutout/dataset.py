@@ -10,10 +10,10 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw
 
+from figure_cutout.export_format import EXPORT_FORMAT_VERSION, export_image_path, read_export_index
 from figure_cutout.image_io import load_rgba
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-EXPORT_FORMAT_VERSION = 2
 PLAIN_BORDER_STD = 8.0
 
 
@@ -139,9 +139,8 @@ def prepare_eval_set(
 
     images_dir = root / "images"
     metadata_dir = root / "metadata"
-    masks_dir = root / "masks"
     splits_dir = root / "splits"
-    for path in (images_dir, metadata_dir, masks_dir, splits_dir):
+    for path in (images_dir, metadata_dir, splits_dir):
         path.mkdir(parents=True, exist_ok=True)
 
     rng = random.Random(seed)
@@ -218,30 +217,12 @@ def is_export_dataset(dataset: Path) -> bool:
     return (dataset / "index.json").is_file()
 
 
-def read_export_index(root: Path) -> list[dict[str, Any]]:
-    """index.json of an image export; only formatVersion 2 is accepted."""
-    if not (root / "index.json").is_file():
-        raise FileNotFoundError(f"No index.json under {root}: export is missing or incomplete.")
-    meta_path = root / "export.json"
-    version = (
-        json.loads(meta_path.read_text(encoding="utf-8")).get("formatVersion")
-        if meta_path.is_file()
-        else 1
-    )
-    if version != EXPORT_FORMAT_VERSION:
-        raise ValueError(
-            f"Export formatVersion {version} at {root}; expected {EXPORT_FORMAT_VERSION}. "
-            "Re-export the images (see docs/image-export-format.md)."
-        )
-    return json.loads((root / "index.json").read_text(encoding="utf-8"))
-
-
 def _export_paths(root: Path) -> dict[str, Path]:
     return {
-        record["key"]: root / record["path"]
+        record["key"]: export_image_path(root, record)
         for entry in read_export_index(root)
         for record in entry["files"]
-        if record["status"] == "ok"
+        if record["status"] in ("ok", "skipped")
     }
 
 
@@ -308,7 +289,7 @@ def _judge_file(
     max_aspect: float,
 ) -> tuple[str | None, Image.Image | None]:
     """Reject reason (None when accepted) and the loaded image for accepted files."""
-    if record["status"] != "ok":
+    if record["status"] not in ("ok", "skipped"):
         return "download_error", None
     if item_category(entry) not in categories:
         return "category_excluded", None
@@ -316,7 +297,7 @@ def _judge_file(
         return "role_excluded", None
     if record["sha256"] in seen_hashes:
         return "duplicate", None
-    path = root / record["path"]
+    path = export_image_path(root, record)
     if not path.is_file():
         return "missing_file", None
     try:
@@ -347,8 +328,6 @@ def init_export_dataset(
     """
     index = read_export_index(root)
     category_set, role_set = set(categories), set(roles)
-    for path in (root / "masks", root / "metadata", root / "splits"):
-        path.mkdir(parents=True, exist_ok=True)
 
     accepted: list[str] = []
     rejected: dict[str, list[str]] = {}
@@ -395,6 +374,7 @@ def init_export_dataset(
                 "width": image.width,
                 "height": image.height,
             }
+            meta_path.parent.mkdir(parents=True, exist_ok=True)
             meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
             created_metadata.append(key)
 
@@ -405,10 +385,9 @@ def init_export_dataset(
         listed = set(_read_split(root, "val") or [])
         unlisted = [key for key in accepted if key not in listed]
     elif accepted:  # an empty split would be frozen forever; wait for accepted samples
+        val_path.parent.mkdir(parents=True, exist_ok=True)
         val_path.write_text("".join(f"{key}\n" for key in accepted), encoding="utf-8")
         split_created = True
-    for split in ("train", "test"):
-        (root / "splits" / f"{split}.txt").touch()
 
     manifest_path = root / "manifest.json"
     if not manifest_path.exists():

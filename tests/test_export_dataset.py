@@ -29,7 +29,7 @@ def _noise(size: tuple[int, int], seed: int) -> Image.Image:
 
 
 class ExportBuilder:
-    """Writes a formatVersion 2 export (see docs/image-export-format.md)."""
+    """Writes a formatVersion 4 export (see docs/image-export-format.md)."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -44,6 +44,7 @@ class ExportBuilder:
                 "role": role,
                 "url": f"https://cdn.example.com/{folder}/{position}",
                 "path": None,
+                "storage": None,
                 "status": "error",
                 "error": "404",
                 "format": None,
@@ -57,6 +58,7 @@ class ExportBuilder:
                 (self.root / path).write_bytes(body)
                 record.update(
                     path=path,
+                    storage="export",
                     status="ok",
                     error=None,
                     format=fmt,
@@ -82,7 +84,7 @@ class ExportBuilder:
     def missing(self, item_id: str) -> None:
         self.index.append({"id": item_id, "error": "not_in_library", "files": []})
 
-    def write(self, version: int | None = 2) -> Path:
+    def write(self, version: int | None = 4) -> Path:
         self.root.mkdir(parents=True, exist_ok=True)
         if version is not None:
             (self.root / "export.json").write_text(

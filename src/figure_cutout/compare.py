@@ -113,7 +113,6 @@ def compare_runs(
     compare_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     out_dir = compare_root / name / compare_id
     sheets_dir = out_dir / "sheets"
-    sheets_dir.mkdir(parents=True, exist_ok=True)
 
     samples: list[dict[str, Any]] = []
     for sample in collect_samples(dataset, split=split):
@@ -128,6 +127,7 @@ def compare_runs(
             tiles.append(_tile(Image.open(path), pid, bool(review)))
             row["outputs"][pid] = str(path)
             row["requires_review"][pid] = review
+        sheets_dir.mkdir(parents=True, exist_ok=True)
         sheet = sheets_dir / f"{sample.id}.png"
         _grid(tiles).convert("RGB").save(sheet)
         row["sheet"] = str(sheet)

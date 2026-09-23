@@ -133,12 +133,13 @@ def restore_cached_result(entry: Path, output: Path, debug_sample_dir: Path | No
     shutil.copy2(entry / CACHE_OUTPUT, output)
     if debug_sample_dir is None:
         return
-    debug_sample_dir.mkdir(parents=True, exist_ok=True)
     for path in entry.iterdir():
         if path.name not in (CACHE_OUTPUT, CACHE_INFO, "metrics.json"):
+            debug_sample_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, debug_sample_dir / path.name)
     metrics_path = entry / "metrics.json"
     if metrics_path.is_file():
+        debug_sample_dir.mkdir(parents=True, exist_ok=True)
         metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
         metrics.update(output=str(output), cache_hit=True, cache_entry=str(entry))
         _write_json(debug_sample_dir / "metrics.json", metrics)
