@@ -47,30 +47,31 @@ figure-cutout run photo.jpg --output data/results/photo.png --pipeline rembg-bir
 
 ## 모델 비교
 
-### 1. 사진 넣기
+### 1. export 가져오기
 
-```text
-datasets/figure-real-v1/images/fig-0001.jpg
-datasets/figure-real-v1/images/fig-0002.jpg
-...
+`subculture-researcher`의 「이미지 다운로드」 ZIP(formatVersion 2)을 데이터셋 폴더로 푼다.
+
+```bash
+unzip library-images-<stamp>.zip -d datasets/figure-shop-v1
 ```
 
-- 파일명: `fig-0001.jpg` 형식, 소문자, 공백·한글 금지
-- 확장자: `.jpg` / `.png` / `.webp`
-- 첫 비교 이후 파일명 변경·삭제 금지. 구성을 바꾸면 `figure-real-v2`로 새로 만든다
+- export 파일(`export.json`, `index.json`, `items/`)은 수정 금지
+- 새 export는 `figure-shop-v2`처럼 새 폴더로
 
 ### 2. 색인
 
 ```bash
-figure-cutout init-dataset --dataset datasets/figure-real-v1
+figure-cutout init-dataset --dataset datasets/figure-shop-v1
 ```
 
-`metadata/<id>.json`, `splits/val.txt`가 생성된다. metadata의 `tags`에 특징을 적는다 (`sword`, `wings`, `display_base`, `transparent_effect` 등).
+`metadata/<key>.json`, `splits/val.txt`가 생성된다. 기본값: `category == FIGURE`, main + detail, 짧은 변 256px 이상, 비율 3:1 이하, 중복 제거. 제외 사유별 개수가 출력된다. metadata의 `tags`에 특징을 적는다 (`sword`, `wings`, `display_base`, `transparent_effect` 등).
+
+주의점·제외 규칙: [docs/export-dataset.md](./docs/export-dataset.md)
 
 ### 3. 모델 실행
 
 ```bash
-figure-cutout eval --dataset datasets/figure-real-v1 \
+figure-cutout eval --dataset datasets/figure-shop-v1 \
   --pipeline rembg-birefnet-general \
   --pipeline rembg-isnet-anime
 ```
@@ -80,14 +81,14 @@ figure-cutout eval --dataset datasets/figure-real-v1 \
 ### 4. 나란히 비교
 
 ```bash
-figure-cutout compare --dataset datasets/figure-real-v1 \
+figure-cutout compare --dataset datasets/figure-shop-v1 \
   --pipeline rembg-birefnet-general \
   --pipeline rembg-isnet-anime
 ```
 
 ```text
-data/compare/figure-real-v1/<compare-id>/
-├── sheets/fig-0001.png   # 원본 | 모델별 결과 (체크무늬 = 투명, 빨간 라벨 = 경고)
+data/compare/figure-shop-v1/<compare-id>/
+├── sheets/<key>.png      # 원본 | 모델별 결과 (체크무늬 = 투명, 빨간 라벨 = 경고)
 ├── summary.json          # 모델별 속도, 성공/실패, 경고 수
 └── review.csv            # 채점표: score_1to5, failure_tags, note
 ```
@@ -136,4 +137,6 @@ pytest            # uv: uv run pytest
 - [AGENTS.md](./AGENTS.md) — 저장소 규칙, 구조
 - [docs/architecture.md](./docs/architecture.md) — 런타임 구조
 - [docs/ml-roadmap.md](./docs/ml-roadmap.md) — 모델 평가·학습 진행 순서
-- [docs/model-candidates.md](./docs/model-candidates.md) — 후보 모델, 폴더·파일명 규칙
+- [docs/model-candidates.md](./docs/model-candidates.md) — 후보 모델, 결과 폴더
+- [docs/export-dataset.md](./docs/export-dataset.md) — export 데이터셋 규칙·주의점
+- [docs/image-export-format.md](./docs/image-export-format.md) — export 파일 양식 (subculture-researcher)

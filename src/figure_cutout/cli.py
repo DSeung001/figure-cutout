@@ -8,7 +8,7 @@ from typing import Any
 
 from figure_cutout.benchmark import benchmark_pipeline, eval_pipelines
 from figure_cutout.compare import compare_runs
-from figure_cutout.dataset import init_real_dataset, prepare_eval_set
+from figure_cutout.dataset import init_export_dataset, prepare_eval_set
 from figure_cutout.ml.factory import DEFAULT_PIPELINE, build_pipeline, list_pipelines
 
 
@@ -74,7 +74,14 @@ def cmd_prepare_dataset(args: argparse.Namespace) -> int:
 
 
 def cmd_init_dataset(args: argparse.Namespace) -> int:
-    _print_json(init_real_dataset(args.dataset))
+    summary = init_export_dataset(
+        args.dataset,
+        categories=args.categories or ["FIGURE"],
+        roles=args.roles or ["main", "detail"],
+        min_side=args.min_side,
+        max_aspect=args.max_aspect,
+    )
+    _print_json({key: value for key, value in summary.items() if key != "rejected"})
     return 0
 
 
@@ -144,16 +151,33 @@ def build_parser() -> argparse.ArgumentParser:
 
     init_parser = sub.add_parser(
         "init-dataset",
-        help="Index real photos in <dataset>/images: metadata stubs + val split.",
+        help="Index an image export (index.json) in place: metadata stubs + val split.",
     )
-    init_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-real-v1"))
+    init_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-shop-v1"))
+    init_parser.add_argument(
+        "--category",
+        action="append",
+        dest="categories",
+        help="Export `category` value to keep (repeatable). Default: FIGURE.",
+    )
+    init_parser.add_argument(
+        "--role",
+        action="append",
+        dest="roles",
+        choices=["main", "detail"],
+        help="Image role to keep (repeatable). Default: main and detail.",
+    )
+    init_parser.add_argument("--min-side", type=int, default=256)
+    init_parser.add_argument(
+        "--max-aspect", type=float, default=3.0, help="Reject long banners beyond this ratio."
+    )
     init_parser.set_defaults(func=cmd_init_dataset)
 
     compare_parser = sub.add_parser(
         "compare",
         help="Side-by-side sheets + review.csv from the latest run of each pipeline.",
     )
-    compare_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-real-v1"))
+    compare_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-shop-v1"))
     compare_parser.add_argument(
         "--pipeline",
         action="append",

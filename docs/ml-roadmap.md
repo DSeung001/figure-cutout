@@ -250,6 +250,6 @@ Keep the previous baseline for comparison.
 - [ ] add one detector + segmenter baseline
 - [x] extend benchmark JSON with model/device metadata
 - [x] add debug artifact output
-- [~] prepare a 50-100 image evaluation set (`datasets/figure-real-v1`, `init-dataset`; photos pending)
+- [~] prepare a 50-100 image evaluation set (`datasets/figure-shop-v1` from image export, `init-dataset`; export pending) — see [export-dataset.md](./export-dataset.md)
 - [ ] record failures by category
 - [ ] decide on fine-tuning only after benchmark review

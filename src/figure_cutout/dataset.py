@@ -2,11 +2,27 @@ from __future__ import annotations
 
 import json
 import random
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 from PIL import Image, ImageDraw
 
+from figure_cutout.image_io import load_rgba
+
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+EXPORT_FORMAT_VERSION = 2
+PLAIN_BORDER_STD = 8.0
+
+
+@dataclass(frozen=True, slots=True)
+class Sample:
+    """One evaluation image. `id` names benchmark outputs, masks and metadata."""
+
+    id: str
+    path: Path
 
 # Representative difficulty tags from the ML roadmap evaluation set.
 SAMPLE_TAG_SETS: list[list[str]] = [
@@ -187,77 +203,237 @@ def resolve_image_dir(dataset: Path) -> Path:
     raise FileNotFoundError(f"Dataset path not found: {dataset}")
 
 
-def collect_images(dataset: Path, split: str = "val") -> list[Path]:
-    """Return images of a split. A split file must resolve completely to keep runs comparable."""
-    image_dir = resolve_image_dir(dataset)
+def _read_split(dataset: Path, split: str) -> list[str] | None:
     split_file = dataset / "splits" / f"{split}.txt"
+    if not split_file.is_file():
+        return None
+    return [
+        line.strip()
+        for line in split_file.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
 
-    if split_file.is_file():
-        names = [
-            line.strip()
-            for line in split_file.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.startswith("#")
-        ]
-        missing = [name for name in names if not (image_dir / name).is_file()]
-        if missing:
-            raise FileNotFoundError(f"Split '{split}' lists missing images: {missing[:5]}")
-        images = sorted(image_dir / name for name in names)
-    else:
-        images = sorted(
-            path for path in image_dir.rglob("*") if path.suffix.lower() in SUPPORTED_EXTENSIONS
+
+def is_export_dataset(dataset: Path) -> bool:
+    return (dataset / "index.json").is_file()
+
+
+def read_export_index(root: Path) -> list[dict[str, Any]]:
+    """index.json of an image export; only formatVersion 2 is accepted."""
+    if not (root / "index.json").is_file():
+        raise FileNotFoundError(f"No index.json under {root}: export is missing or incomplete.")
+    meta_path = root / "export.json"
+    version = (
+        json.loads(meta_path.read_text(encoding="utf-8")).get("formatVersion")
+        if meta_path.is_file()
+        else 1
+    )
+    if version != EXPORT_FORMAT_VERSION:
+        raise ValueError(
+            f"Export formatVersion {version} at {root}; expected {EXPORT_FORMAT_VERSION}. "
+            "Re-export the images (see docs/image-export-format.md)."
         )
+    return json.loads((root / "index.json").read_text(encoding="utf-8"))
 
-    if not images:
+
+def _export_paths(root: Path) -> dict[str, Path]:
+    return {
+        record["key"]: root / record["path"]
+        for entry in read_export_index(root)
+        for record in entry["files"]
+        if record["status"] == "ok"
+    }
+
+
+def collect_samples(dataset: Path, split: str = "val") -> list[Sample]:
+    """Return samples of a split. A split file must resolve completely to keep runs comparable."""
+    names = _read_split(dataset, split)
+
+    if is_export_dataset(dataset):
+        if names is None:
+            raise FileNotFoundError(
+                f"No splits/{split}.txt under {dataset}. Run: figure-cutout init-dataset"
+            )
+        paths = _export_paths(dataset)
+        missing = [key for key in names if key not in paths or not paths[key].is_file()]
+        if missing:
+            raise FileNotFoundError(f"Split '{split}' lists missing samples: {missing[:5]}")
+        samples = [Sample(key, paths[key]) for key in names]
+    else:
+        image_dir = resolve_image_dir(dataset)
+        if names is not None:
+            missing = [name for name in names if not (image_dir / name).is_file()]
+            if missing:
+                raise FileNotFoundError(f"Split '{split}' lists missing images: {missing[:5]}")
+            image_paths = sorted(image_dir / name for name in names)
+        else:
+            image_paths = sorted(
+                path for path in image_dir.rglob("*") if path.suffix.lower() in SUPPORTED_EXTENSIONS
+            )
+        samples = [Sample(path.stem, path) for path in image_paths]
+
+    if not samples:
         raise FileNotFoundError(f"No images for split '{split}' under {dataset}")
-    return images
+    return samples
 
 
-def init_real_dataset(root: Path) -> dict[str, object]:
-    """Index user-provided photos: create metadata stubs and a val split without renaming files.
+def _auto_tags(image: Image.Image) -> list[str]:
+    """Cheap background hints for product shots; not a replacement for manual tags."""
+    rgba = np.asarray(image.convert("RGBA"))
+    tags: list[str] = []
+    if int(rgba[..., 3].min()) < 255:
+        tags.append("has_alpha")
+    border = np.concatenate(
+        [rgba[0, :, :3], rgba[-1, :, :3], rgba[:, 0, :3], rgba[:, -1, :3]]
+    ).astype(np.float32)
+    if float(border.std(axis=0).max()) < PLAIN_BORDER_STD:
+        tags.append("plain_border")
+    return tags
 
-    An existing val split is never rewritten, so earlier benchmark runs stay comparable.
+
+def item_category(entry: dict[str, Any]) -> str:
+    """User-edited `category`; the storage category (id prefix) when it is empty."""
+    return entry.get("category") or entry["id"].partition(":")[0]
+
+
+def _judge_file(
+    entry: dict[str, Any],
+    record: dict[str, Any],
+    root: Path,
+    *,
+    categories: set[str],
+    roles: set[str],
+    seen_hashes: dict[str, str],
+    min_side: int,
+    max_aspect: float,
+) -> tuple[str | None, Image.Image | None]:
+    """Reject reason (None when accepted) and the loaded image for accepted files."""
+    if record["status"] != "ok":
+        return "download_error", None
+    if item_category(entry) not in categories:
+        return "category_excluded", None
+    if record["role"] not in roles:
+        return "role_excluded", None
+    if record["sha256"] in seen_hashes:
+        return "duplicate", None
+    path = root / record["path"]
+    if not path.is_file():
+        return "missing_file", None
+    try:
+        image = load_rgba(path)
+    except Exception:  # noqa: BLE001 - truncated/corrupt files are rejected, not fatal
+        return "decode_error", None
+    seen_hashes[record["sha256"]] = record["key"]
+    short, long = sorted(image.size)
+    if short < min_side:
+        return "too_small", None
+    if long / short > max_aspect:
+        return "extreme_aspect", None
+    return None, image
+
+
+def init_export_dataset(
+    root: Path,
+    *,
+    categories: Iterable[str] = ("FIGURE",),
+    roles: Iterable[str] = ("main", "detail"),
+    min_side: int = 256,
+    max_aspect: float = 3.0,
+) -> dict[str, Any]:
+    """Index an image export in place: metadata stubs, val split and manifest beside it.
+
+    Export files are never modified. Existing metadata and splits are never rewritten, so
+    manual tags survive and earlier benchmark runs stay comparable.
     """
-    images_dir = root / "images"
-    for path in (images_dir, root / "masks", root / "metadata", root / "splits"):
+    index = read_export_index(root)
+    category_set, role_set = set(categories), set(roles)
+    for path in (root / "masks", root / "metadata", root / "splits"):
         path.mkdir(parents=True, exist_ok=True)
 
-    images = sorted(
-        path.name for path in images_dir.iterdir() if path.suffix.lower() in SUPPORTED_EXTENSIONS
-    )
-
+    accepted: list[str] = []
+    rejected: dict[str, list[str]] = {}
     created_metadata: list[str] = []
-    for name in images:
-        stem = Path(name).stem
-        meta_path = root / "metadata" / f"{stem}.json"
-        if meta_path.exists():
+    seen_hashes: dict[str, str] = {}
+    for entry in index:
+        if entry.get("error") == "not_in_library":
+            rejected.setdefault("not_in_library", []).append(entry["id"])
             continue
-        meta = {"id": stem, "tags": [], "difficulty": "unknown", "source": "real"}
-        meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
-        created_metadata.append(stem)
+        for record in entry["files"]:
+            reason, image = _judge_file(
+                entry,
+                record,
+                root,
+                categories=category_set,
+                roles=role_set,
+                seen_hashes=seen_hashes,
+                min_side=min_side,
+                max_aspect=max_aspect,
+            )
+            if reason is not None:
+                rejected.setdefault(reason, []).append(record["key"])
+                continue
+            assert image is not None
+            key = record["key"]
+            accepted.append(key)
+            meta_path = root / "metadata" / f"{key}.json"
+            if meta_path.exists():
+                continue
+            meta = {
+                "id": key,
+                "tags": [],
+                "auto_tags": _auto_tags(image),
+                "difficulty": "unknown",
+                "source": "export",
+                "item_id": entry["id"],
+                "role": record["role"],
+                "category": item_category(entry),
+                "title": entry["title"],
+                "title_ko": entry["titleKo"],
+                "shop": entry["shop"],
+                "product_url": entry["url"],
+                "image_url": record["url"],
+                "width": image.width,
+                "height": image.height,
+            }
+            meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+            created_metadata.append(key)
 
     val_path = root / "splits" / "val.txt"
+    split_created = False
+    unlisted: list[str] = []
     if val_path.exists():
-        listed = {line.strip() for line in val_path.read_text(encoding="utf-8").splitlines()}
-        unlisted = [name for name in images if name not in listed]
-        split_created = False
-    else:
-        val_path.write_text("".join(f"{name}\n" for name in images), encoding="utf-8")
-        unlisted = []
+        listed = set(_read_split(root, "val") or [])
+        unlisted = [key for key in accepted if key not in listed]
+    elif accepted:  # an empty split would be frozen forever; wait for accepted samples
+        val_path.write_text("".join(f"{key}\n" for key in accepted), encoding="utf-8")
         split_created = True
     for split in ("train", "test"):
         (root / "splits" / f"{split}.txt").touch()
 
     manifest_path = root / "manifest.json"
     if not manifest_path.exists():
-        manifest = {"dataset": root.name, "source": "real", "split": "val"}
+        manifest = {
+            "dataset": root.name,
+            "source": "export",
+            "export_format_version": EXPORT_FORMAT_VERSION,
+            "split": "val",
+            "filters": {
+                "categories": sorted(category_set),
+                "roles": sorted(role_set),
+                "min_side": min_side,
+                "max_aspect": max_aspect,
+            },
+        }
         manifest_path.write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
         )
 
     return {
         "dataset": str(root),
-        "image_count": len(images),
-        "metadata_created": created_metadata,
+        "accepted_count": len(accepted),
+        "rejected_count": {reason: len(keys) for reason, keys in sorted(rejected.items())},
+        "rejected": dict(sorted(rejected.items())),
+        "metadata_created": len(created_metadata),
         "val_split_created": split_created,
         "unlisted_in_val": unlisted,
     }

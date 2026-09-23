@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 
 from figure_cutout.domain.models import CutoutOptions, CutoutResult, PipelineTrace
+from figure_cutout.image_io import load_rgba
 from figure_cutout.ml.contracts import Detector, MaskRefiner, QualityEvaluator, Segmenter
 
 
@@ -33,7 +34,7 @@ class FigureCutoutPipeline:
     ) -> CutoutResult:
         options = options or CutoutOptions()
 
-        rgba = Image.open(source).convert("RGBA")
+        rgba = load_rgba(source)
         image = np.asarray(rgba)
 
         detections = self.detector.detect(image)
@@ -51,7 +52,10 @@ class FigureCutoutPipeline:
             segmentation_confidence=segmentation.confidence,
         )
 
-        alpha = Image.fromarray(np.asarray(mask, dtype=np.uint8), mode="L")
+        # Already-transparent input (cut-out product shots) keeps its transparency.
+        alpha = Image.fromarray(
+            np.minimum(image[..., 3], np.asarray(mask, dtype=np.uint8)), mode="L"
+        )
         result = rgba.copy()
         result.putalpha(alpha)
 

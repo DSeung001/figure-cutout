@@ -77,30 +77,16 @@ DIS 계열은 좌대를 피규어와 한 덩어리로 자름. Tier 1 결과에�
 
 ## 데이터 폴더 구조
 
-```text
-datasets/figure-real-v1/
-├── images/fig-0001.jpg        # 사진 입력
-├── metadata/fig-0001.json     # init-dataset이 생성, tags 직접 입력
-├── masks/fig-0001.png         # 정답 마스크 (Phase 6)
-├── splits/val.txt
-└── manifest.json
-```
-
-파일명 규칙:
-
-- `fig-0001.jpg` — 소문자, 4자리 번호, 공백·한글 금지
-- 확장자 `.jpg` / `.png` / `.webp`
-- val split 생성 후 파일명 변경·삭제 금지. 구성을 바꾸려면 `figure-real-v2`로 새로 만든다
-- tags: [ml-roadmap.md](./ml-roadmap.md) Phase 2 태그 사용 (`sword`, `wings`, `display_base`, `transparent_effect`, ...)
+`subculture-researcher` 이미지 export를 그대로 사용. 레이아웃·제외 규칙·주의점: [export-dataset.md](./export-dataset.md)
 
 ## 결과 폴더 구조
 
 ```text
 benchmarks/<pipeline-id>/<run-id>.json                      # 속도·성공/실패
-data/benchmark-results/<pipeline-id>/<run-id>/000000-fig-0001.png   # 투명 PNG
-data/debug/<run-id>/000000-fig-0001/                        # 마스크·품질 경고
-data/compare/figure-real-v1/<compare-id>/
-├── sheets/fig-0001.png        # 원본 | 모델 A | 모델 B ... (체크무늬 = 투명, 빨간 라벨 = 경고)
+data/benchmark-results/<pipeline-id>/<run-id>/000000-<key>.png   # 투명 PNG
+data/debug/<run-id>/000000-<key>/                        # 마스크·품질 경고
+data/compare/figure-shop-v1/<compare-id>/
+├── sheets/<key>.png           # 원본 | 모델 A | 모델 B ... (체크무늬 = 투명, 빨간 라벨 = 경고)
 ├── summary.json               # 모델별 run-id, latency, 경고 수
 └── review.csv                 # 사람 채점표
 ```
@@ -110,16 +96,17 @@ data/compare/figure-real-v1/<compare-id>/
 ## 비교 절차
 
 ```bash
-# 1. 사진을 datasets/figure-real-v1/images/ 에 넣고 색인
-figure-cutout init-dataset --dataset datasets/figure-real-v1
+# 1. export 압축 해제 후 색인
+unzip library-images-<stamp>.zip -d datasets/figure-shop-v1
+figure-cutout init-dataset --dataset datasets/figure-shop-v1
 
 # 2. 후보 실행 (첫 실행 시 ~/.rembg/models 에 가중치 다운로드)
-figure-cutout eval --dataset datasets/figure-real-v1 \
+figure-cutout eval --dataset datasets/figure-shop-v1 \
   --pipeline rembg --pipeline rembg-isnet-anime \
   --pipeline rembg-birefnet-general --pipeline rembg-birefnet-lite
 
 # 3. 나란히 비교
-figure-cutout compare --dataset datasets/figure-real-v1 \
+figure-cutout compare --dataset datasets/figure-shop-v1 \
   --pipeline rembg --pipeline rembg-isnet-anime \
   --pipeline rembg-birefnet-general --pipeline rembg-birefnet-lite
 ```

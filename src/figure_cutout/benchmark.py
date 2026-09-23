@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-from figure_cutout.dataset import collect_images, dataset_name
+from figure_cutout.dataset import Sample, collect_samples, dataset_name
 from figure_cutout.domain.models import CutoutResult
 from figure_cutout.ml.factory import build_pipeline, list_pipelines
 from figure_cutout.ml.pipeline import FigureCutoutPipeline
@@ -82,11 +82,16 @@ def write_debug_artifacts(sample_dir: Path, result: CutoutResult) -> None:
     )
 
 
-def write_failure_artifact(sample_dir: Path, source: Path, exc: Exception) -> None:
+def write_failure_artifact(sample_dir: Path, sample: Sample, exc: Exception) -> None:
     sample_dir.mkdir(parents=True, exist_ok=True)
     _write_json(
         sample_dir / "error.json",
-        {"source": str(source), "type": type(exc).__name__, "error": str(exc)},
+        {
+            "sample_id": sample.id,
+            "source": str(sample.path),
+            "type": type(exc).__name__,
+            "error": str(exc),
+        },
     )
 
 
@@ -155,7 +160,7 @@ def benchmark_pipeline(
     debug_root: Path = Path("data/debug"),
     write_debug: bool = True,
 ) -> dict[str, Any]:
-    images = collect_images(dataset, split=split)
+    samples = collect_samples(dataset, split=split)
     pipeline = build_pipeline(pipeline_id)
     run_id = f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:8]}"
 
@@ -166,15 +171,15 @@ def benchmark_pipeline(
     failures: list[dict[str, str]] = []
 
     started = time.perf_counter()
-    for index, source in enumerate(images):
-        output = result_dir / f"{index:06d}-{source.stem}.png"
+    for index, sample in enumerate(samples):
+        output = result_dir / f"{index:06d}-{sample.id}.png"
         item_started = time.perf_counter()
         try:
-            result = pipeline.run(source, output)
+            result = pipeline.run(sample.path, output)
         except Exception as exc:  # noqa: BLE001 - per-image failures are recorded, not fatal
-            failures.append({"source": str(source), "error": str(exc)})
+            failures.append({"sample_id": sample.id, "source": str(sample.path), "error": str(exc)})
             if debug_dir is not None:
-                write_failure_artifact(debug_dir / output.stem, source, exc)
+                write_failure_artifact(debug_dir / output.stem, sample, exc)
             continue
         latencies_ms.append((time.perf_counter() - item_started) * 1000)
         if debug_dir is not None:
@@ -186,7 +191,7 @@ def benchmark_pipeline(
         pipeline=pipeline,
         dataset=dataset,
         split=split,
-        image_count=len(images),
+        image_count=len(samples),
         latencies_ms=latencies_ms,
         failures=failures,
         elapsed=elapsed,

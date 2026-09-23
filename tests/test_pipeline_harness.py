@@ -9,7 +9,7 @@ from PIL import Image
 
 from figure_cutout.benchmark import benchmark_pipeline, eval_pipelines
 from figure_cutout.cli import main
-from figure_cutout.dataset import collect_images, prepare_eval_set
+from figure_cutout.dataset import collect_samples, prepare_eval_set
 from figure_cutout.domain.models import Detection
 from figure_cutout.ml import factory as factory_module
 from figure_cutout.ml import rembg_adapter
@@ -36,8 +36,9 @@ def test_build_unknown_pipeline_raises() -> None:
 
 
 def test_pipeline_run_returns_trace(dataset: Path, tmp_path: Path) -> None:
-    source = collect_images(dataset)[0]
-    result = build_pipeline("placeholder").run(source, tmp_path / "out.png")
+    sample = collect_samples(dataset)[0]
+    assert sample.id == "sample-001"
+    result = build_pipeline("placeholder").run(sample.path, tmp_path / "out.png")
     assert result.trace is not None
     assert result.trace.detection.label == "figure"
     assert np.asarray(result.trace.raw_mask).shape == np.asarray(result.trace.refined_mask).shape
@@ -58,16 +59,16 @@ def test_prepare_eval_set_refuses_overwrite(dataset: Path) -> None:
     prepare_eval_set(dataset, count=3, overwrite=True)
 
 
-def test_collect_images_rejects_missing_split_entry(dataset: Path) -> None:
+def test_collect_samples_rejects_missing_split_entry(dataset: Path) -> None:
     val = dataset / "splits" / "val.txt"
     val.write_text(val.read_text(encoding="utf-8") + "ghost.jpg\n", encoding="utf-8")
     with pytest.raises(FileNotFoundError, match="ghost.jpg"):
-        collect_images(dataset, split="val")
+        collect_samples(dataset, split="val")
 
 
-def test_collect_images_rejects_empty_split(dataset: Path) -> None:
+def test_collect_samples_rejects_empty_split(dataset: Path) -> None:
     with pytest.raises(FileNotFoundError):
-        collect_images(dataset, split="train")
+        collect_samples(dataset, split="train")
 
 
 def test_benchmark_writes_report_and_debug(dataset: Path, tmp_path: Path) -> None:
@@ -104,7 +105,10 @@ def test_benchmark_records_failure_artifact(dataset: Path, tmp_path: Path) -> No
     assert (report["success_count"], report["failure_count"]) == (2, 1)
     errors = list(Path(report["debug_dir"]).glob("*/error.json"))
     assert len(errors) == 1
-    assert json.loads(errors[0].read_text(encoding="utf-8"))["source"].endswith("sample-002.jpg")
+    error = json.loads(errors[0].read_text(encoding="utf-8"))
+    assert error["sample_id"] == "sample-002"
+    assert error["source"].endswith("sample-002.jpg")
+    assert report["failures"][0]["sample_id"] == "sample-002"
 
 
 def test_eval_skips_pipeline_with_missing_dependency(

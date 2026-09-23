@@ -35,7 +35,9 @@ figure-cutout/
 ├── docs/
 │   ├── architecture.md       # runtime structure
 │   ├── ml-roadmap.md         # model evaluation / training progression
-│   └── model-candidates.md   # candidate models, licenses, dataset/result layout
+│   ├── model-candidates.md   # candidate models, licenses, result layout
+│   ├── export-dataset.md     # evaluation dataset built from image exports
+│   └── image-export-format.md # export file format (owned by subculture-researcher)
 ├── src/figure_cutout/
 │   ├── api/                  # HTTP API (validation, jobs, status, delivery)
 │   ├── worker/               # long-lived GPU worker
@@ -44,7 +46,8 @@ figure-cutout/
 │   ├── storage/              # storage interface + implementations
 │   ├── benchmark.py
 │   ├── compare.py
-│   ├── dataset.py
+│   ├── dataset.py            # export / synthetic datasets, splits
+│   ├── image_io.py           # shared input image decoding
 │   └── cli.py
 ├── tests/
 ├── benchmarks/               # benchmark JSON (generated, not committed)

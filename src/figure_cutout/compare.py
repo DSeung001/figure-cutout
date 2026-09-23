@@ -8,7 +8,8 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-from figure_cutout.dataset import collect_images, dataset_name
+from figure_cutout.dataset import collect_samples, dataset_name
+from figure_cutout.image_io import load_rgba
 
 TILE_HEIGHT = 512
 LABEL_HEIGHT = 28
@@ -36,18 +37,18 @@ def latest_run(
 
 
 def _sample_outputs(report: dict[str, Any]) -> dict[str, tuple[Path, bool | None]]:
-    """Map sample stem -> (result image, requires_review) for one run."""
+    """Map sample id -> (result image, requires_review) for one run."""
     result_dir = Path(report["result_dir"])
     debug_dir = Path(report["debug_dir"]) if report.get("debug_dir") else None
     outputs: dict[str, tuple[Path, bool | None]] = {}
     for path in sorted(result_dir.glob("*.png")):
-        # Result files are named "<index>-<sample stem>.png" by the benchmark.
-        sample_stem = path.stem.split("-", 1)[1]
+        # Result files are named "<index>-<sample id>.png" by the benchmark.
+        sample_id = path.stem.split("-", 1)[1]
         review: bool | None = None
         metrics = debug_dir / path.stem / "metrics.json" if debug_dir else None
         if metrics is not None and metrics.is_file():
             review = json.loads(metrics.read_text(encoding="utf-8"))["quality"]["requires_review"]
-        outputs[sample_stem] = (path, review)
+        outputs[sample_id] = (path, review)
     return outputs
 
 
@@ -115,11 +116,11 @@ def compare_runs(
     sheets_dir.mkdir(parents=True, exist_ok=True)
 
     samples: list[dict[str, Any]] = []
-    for source in collect_images(dataset, split=split):
-        tiles = [_tile(Image.open(source), "original", False)]
-        row: dict[str, Any] = {"sample_id": source.stem, "outputs": {}, "requires_review": {}}
+    for sample in collect_samples(dataset, split=split):
+        tiles = [_tile(load_rgba(sample.path), "original", False)]
+        row: dict[str, Any] = {"sample_id": sample.id, "outputs": {}, "requires_review": {}}
         for pid in pipeline_ids:
-            result = outputs[pid].get(source.stem)
+            result = outputs[pid].get(sample.id)
             if result is None:
                 row["outputs"][pid] = None
                 continue
@@ -127,7 +128,7 @@ def compare_runs(
             tiles.append(_tile(Image.open(path), pid, bool(review)))
             row["outputs"][pid] = str(path)
             row["requires_review"][pid] = review
-        sheet = sheets_dir / f"{source.stem}.png"
+        sheet = sheets_dir / f"{sample.id}.png"
         _grid(tiles).convert("RGB").save(sheet)
         row["sheet"] = str(sheet)
         samples.append(row)
