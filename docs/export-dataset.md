@@ -2,10 +2,20 @@
 
 `subculture-researcher` 이미지 export(formatVersion 2, [image-export-format.md](./image-export-format.md))를 평가 데이터셋으로 그대로 쓴다. export 파일은 수정하지 않고 옆에 sidecar만 추가한다.
 
+## 경로
+
+| 항목 | 값 |
+|---|---|
+| 공유 폴더 | `$FIGURE_PROJECT_DIR`, 미설정 시 `~/figure_project` |
+| export 위치 | `<공유 폴더>/exports/<stamp>/` (+ `<stamp>.zip`) |
+| 설정 | 두 저장소의 `.env`에 같은 `FIGURE_PROJECT_DIR` |
+| `--dataset` 생략 시 | `index.json`이 있는 가장 최근 `<stamp>` 폴더 |
+| 데이터셋 이름 | `<stamp>` (benchmark JSON의 `dataset`, `data/compare/<stamp>/`) |
+
 ## 레이아웃
 
 ```text
-datasets/figure-shop-v1/
+~/figure_project/exports/<stamp>/
 ├── export.json                 # export 원본 — 수정 금지
 ├── index.json                  # export 원본 — 수정 금지
 ├── items/FIGURE_3f2a…c9/00_main.jpg
@@ -21,10 +31,10 @@ datasets/figure-shop-v1/
 ## 절차
 
 ```bash
-unzip library-images-<stamp>.zip -d datasets/figure-shop-v1
-figure-cutout init-dataset --dataset datasets/figure-shop-v1
-figure-cutout eval --dataset datasets/figure-shop-v1 --pipeline rembg-birefnet-general
-figure-cutout compare --dataset datasets/figure-shop-v1 --pipeline rembg-birefnet-general
+# subculture-researcher: 「이미지 다운로드」 또는 python export_images.py --ids …
+figure-cutout init-dataset                      # 최근 export
+figure-cutout eval --pipeline rembg-birefnet-general
+figure-cutout compare --pipeline rembg-birefnet-general
 ```
 
 `init-dataset` 옵션:
@@ -77,7 +87,7 @@ figure-cutout compare --dataset datasets/figure-shop-v1 --pipeline rembg-birefne
 ## 운영 규칙
 
 - `export.json`, `index.json`, `items/`는 수정·삭제 금지
-- 새 export는 새 폴더 (`figure-shop-v2`). 기존 데이터셋에 덮어써 풀지 않는다
+- export마다 새 `<stamp>` 폴더 = 새 데이터셋. 모델 비교는 같은 `<stamp>`에서만 (`--dataset`으로 고정)
 - val split 생성 후 key 삭제·재생성 금지. 구성 변경 = 새 버전
 - train split을 만들 때는 **`item_id` 단위로 분할**. 같은 항목의 main/detail이 train과 val에 나뉘면 누수
 - formatVersion 1 export(`export.json` 없음)는 거부된다. 다시 내보낸다
@@ -85,5 +95,5 @@ figure-cutout compare --dataset datasets/figure-shop-v1 --pipeline rembg-birefne
 ## 저작권
 
 - 쇼핑몰 상품 이미지. 로컬 평가 전용
-- Git 커밋·외부 공유·결과물 배포 금지 (`datasets/`, `data/`는 gitignore)
+- Git 커밋·외부 공유·결과물 배포 금지 (공유 폴더는 저장소 밖, `data/`는 gitignore)
 - 학습(fine-tuning) 데이터로 쓰기 전 이용 권한 확인

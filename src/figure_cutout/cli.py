@@ -6,14 +6,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
 from figure_cutout.benchmark import benchmark_pipeline, eval_pipelines
 from figure_cutout.compare import compare_runs
 from figure_cutout.dataset import init_export_dataset, prepare_eval_set
 from figure_cutout.ml.factory import DEFAULT_PIPELINE, build_pipeline, list_pipelines
+from figure_cutout.settings import latest_export
 
 
 def _print_json(payload: object) -> None:
     print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def _dataset(args: argparse.Namespace) -> Path:
+    """Explicit --dataset, otherwise the newest export in $FIGURE_PROJECT_DIR/exports."""
+    return args.dataset if args.dataset is not None else latest_export()
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -29,7 +37,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_bench(args: argparse.Namespace) -> int:
     report = benchmark_pipeline(
         args.pipeline,
-        args.dataset,
+        _dataset(args),
         split=args.split,
         write_debug=not args.no_debug,
     )
@@ -53,13 +61,14 @@ def _summarize(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
+    dataset = _dataset(args)
     reports = eval_pipelines(
-        args.dataset,
+        dataset,
         pipeline_ids=args.pipelines,
         split=args.split,
         write_debug=not args.no_debug,
     )
-    _print_json({"runs": [_summarize(report) for report in reports]})
+    _print_json({"dataset": str(dataset), "runs": [_summarize(report) for report in reports]})
     failed = any(report["failure_count"] for report in reports)
     # Skipped pipelines only fail the run when explicitly requested.
     skipped_requested = bool(args.pipelines) and any(report.get("skipped") for report in reports)
@@ -75,7 +84,7 @@ def cmd_prepare_dataset(args: argparse.Namespace) -> int:
 
 def cmd_init_dataset(args: argparse.Namespace) -> int:
     summary = init_export_dataset(
-        args.dataset,
+        _dataset(args),
         categories=args.categories or ["FIGURE"],
         roles=args.roles or ["main", "detail"],
         min_side=args.min_side,
@@ -86,7 +95,7 @@ def cmd_init_dataset(args: argparse.Namespace) -> int:
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
-    summary = compare_runs(args.dataset, args.pipelines, split=args.split)
+    summary = compare_runs(_dataset(args), args.pipelines, split=args.split)
     _print_json(
         {
             "output_dir": summary["output_dir"],
@@ -109,6 +118,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    def add_dataset_option(p: argparse.ArgumentParser) -> None:
+        p.add_argument(
+            "--dataset",
+            type=Path,
+            default=None,
+            help="Dataset directory. Default: newest export in $FIGURE_PROJECT_DIR/exports "
+            "(~/figure_project/exports).",
+        )
+
     def add_bench_options(p: argparse.ArgumentParser) -> None:
         p.add_argument("--split", default="val")
         p.add_argument("--no-debug", action="store_true", help="Skip debug artifacts.")
@@ -120,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.set_defaults(func=cmd_run)
 
     bench_parser = sub.add_parser("bench", help="Benchmark one pipeline on a dataset split.")
-    bench_parser.add_argument("--dataset", type=Path, required=True)
+    add_dataset_option(bench_parser)
     bench_parser.add_argument("--pipeline", default=DEFAULT_PIPELINE)
     add_bench_options(bench_parser)
     bench_parser.set_defaults(func=cmd_bench)
@@ -129,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
         "eval",
         help="Benchmark registered pipelines on one split; write benchmark JSON + debug artifacts.",
     )
-    eval_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-v1"))
+    add_dataset_option(eval_parser)
     eval_parser.add_argument(
         "--pipeline",
         action="append",
@@ -153,7 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
         "init-dataset",
         help="Index an image export (index.json) in place: metadata stubs + val split.",
     )
-    init_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-shop-v1"))
+    add_dataset_option(init_parser)
     init_parser.add_argument(
         "--category",
         action="append",
@@ -177,7 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
         "compare",
         help="Side-by-side sheets + review.csv from the latest run of each pipeline.",
     )
-    compare_parser.add_argument("--dataset", type=Path, default=Path("datasets/figure-shop-v1"))
+    add_dataset_option(compare_parser)
     compare_parser.add_argument(
         "--pipeline",
         action="append",
@@ -195,6 +213,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()  # FIGURE_PROJECT_DIR; existing environment variables win
     args = build_parser().parse_args(argv)
     return args.func(args)
 

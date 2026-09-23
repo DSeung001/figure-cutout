@@ -47,21 +47,22 @@ figure-cutout run photo.jpg --output data/results/photo.png --pipeline rembg-bir
 
 ## 모델 비교
 
-### 1. export 가져오기
+### 1. export 경로
 
-`subculture-researcher`의 「이미지 다운로드」 ZIP(formatVersion 2)을 데이터셋 폴더로 푼다.
+`subculture-researcher`의 「이미지 다운로드」 / `export_images.py`가 공유 폴더에 export(formatVersion 2)를 만든다. figure-cutout은 같은 폴더를 읽는다.
 
-```bash
-unzip library-images-<stamp>.zip -d datasets/figure-shop-v1
+```text
+~/figure_project/exports/<stamp>/     # export 1개 = 데이터셋 1개 (이름 = <stamp>)
 ```
 
+- 경로 변경: 두 저장소의 `.env`에 같은 `FIGURE_PROJECT_DIR` 설정 (`.env.example` 참고)
+- `--dataset`을 생략하면 가장 최근 export를 사용한다
 - export 파일(`export.json`, `index.json`, `items/`)은 수정 금지
-- 새 export는 `figure-shop-v2`처럼 새 폴더로
 
 ### 2. 색인
 
 ```bash
-figure-cutout init-dataset --dataset datasets/figure-shop-v1
+figure-cutout init-dataset
 ```
 
 `metadata/<key>.json`, `splits/val.txt`가 생성된다. 기본값: `category == FIGURE`, main + detail, 짧은 변 256px 이상, 비율 3:1 이하, 중복 제거. 제외 사유별 개수가 출력된다. metadata의 `tags`에 특징을 적는다 (`sword`, `wings`, `display_base`, `transparent_effect` 등).
@@ -71,23 +72,23 @@ figure-cutout init-dataset --dataset datasets/figure-shop-v1
 ### 3. 모델 실행
 
 ```bash
-figure-cutout eval --dataset datasets/figure-shop-v1 \
+figure-cutout eval \
   --pipeline rembg-birefnet-general \
   --pipeline rembg-isnet-anime
 ```
 
-`--pipeline`을 생략하면 등록된 모든 모델을 실행한다 (가중치 약 2.7GB).
+`--pipeline`을 생략하면 등록된 모든 모델을 실행한다 (가중치 약 2.7GB). 이전 export로 돌리려면 `--dataset ~/figure_project/exports/<stamp>`.
 
 ### 4. 나란히 비교
 
 ```bash
-figure-cutout compare --dataset datasets/figure-shop-v1 \
+figure-cutout compare \
   --pipeline rembg-birefnet-general \
   --pipeline rembg-isnet-anime
 ```
 
 ```text
-data/compare/figure-shop-v1/<compare-id>/
+data/compare/<stamp>/<compare-id>/
 ├── sheets/<key>.png      # 원본 | 모델별 결과 (체크무늬 = 투명, 빨간 라벨 = 경고)
 ├── summary.json          # 모델별 속도, 성공/실패, 경고 수
 └── review.csv            # 채점표: score_1to5, failure_tags, note

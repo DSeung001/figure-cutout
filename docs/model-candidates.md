@@ -85,7 +85,7 @@ DIS 계열은 좌대를 피규어와 한 덩어리로 자름. Tier 1 결과에�
 benchmarks/<pipeline-id>/<run-id>.json                      # 속도·성공/실패
 data/benchmark-results/<pipeline-id>/<run-id>/000000-<key>.png   # 투명 PNG
 data/debug/<run-id>/000000-<key>/                        # 마스크·품질 경고
-data/compare/figure-shop-v1/<compare-id>/
+data/compare/<stamp>/<compare-id>/
 ├── sheets/<key>.png           # 원본 | 모델 A | 모델 B ... (체크무늬 = 투명, 빨간 라벨 = 경고)
 ├── summary.json               # 모델별 run-id, latency, 경고 수
 └── review.csv                 # 사람 채점표
@@ -96,17 +96,16 @@ data/compare/figure-shop-v1/<compare-id>/
 ## 비교 절차
 
 ```bash
-# 1. export 압축 해제 후 색인
-unzip library-images-<stamp>.zip -d datasets/figure-shop-v1
-figure-cutout init-dataset --dataset datasets/figure-shop-v1
+# 1. 최근 export 색인 (~/figure_project/exports/<stamp>)
+figure-cutout init-dataset
 
 # 2. 후보 실행 (첫 실행 시 ~/.rembg/models 에 가중치 다운로드)
-figure-cutout eval --dataset datasets/figure-shop-v1 \
+figure-cutout eval \
   --pipeline rembg --pipeline rembg-isnet-anime \
   --pipeline rembg-birefnet-general --pipeline rembg-birefnet-lite
 
 # 3. 나란히 비교
-figure-cutout compare --dataset datasets/figure-shop-v1 \
+figure-cutout compare \
   --pipeline rembg --pipeline rembg-isnet-anime \
   --pipeline rembg-birefnet-general --pipeline rembg-birefnet-lite
 ```
