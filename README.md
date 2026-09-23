@@ -4,20 +4,36 @@
 
 ## 설치
 
-Python 3.11+.
+Python 3.11 이상. 가상환경은 프로젝트 루트의 `.venv/` 하나를 사용한다 (Git 제외).
+
+### A. uv 사용
 
 ```bash
-uv sync --extra dev --extra ml
+uv sync --extra dev --extra ml   # .venv 생성 + 의존성 설치
+uv run figure-cutout list-pipelines
 ```
 
-uv가 없으면:
+### B. venv + pip 사용
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -e '.[ml,dev]'
+python3 --version                  # 3.11 이상 확인
+python3 -m venv .venv              # 가상환경 생성
+source .venv/bin/activate          # 활성화 (프롬프트에 (.venv) 표시)
+pip install -U pip
+pip install -e '.[ml,dev]'         # 패키지 + 모델 + 테스트 도구
+figure-cutout list-pipelines       # 설치 확인
 ```
 
-이하 명령은 `uv run figure-cutout ...` 또는 `.venv/bin/figure-cutout ...` 으로 실행.
+| extra | 내용 |
+|---|---|
+| `ml` | rembg, onnxruntime (실제 모델 실행) |
+| `dev` | pytest, ruff |
+
+- 새 터미널마다 `source .venv/bin/activate` 필요. 종료는 `deactivate`
+- 활성화 없이 실행: `.venv/bin/figure-cutout ...`
+- 재설치: `rm -rf .venv` 후 위 절차 반복
+
+이하 명령은 활성화된 가상환경 기준 `figure-cutout ...` 으로 표기 (uv는 `uv run figure-cutout ...`).
 
 ## 사진 한 장 처리
 
@@ -112,7 +128,7 @@ data/debug/<run-id>/                                # 마스크·품질 판정
 ## 테스트
 
 ```bash
-.venv/bin/python -m pytest
+pytest            # uv: uv run pytest
 ```
 
 ## 문서
