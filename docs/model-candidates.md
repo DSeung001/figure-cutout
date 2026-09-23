@@ -85,6 +85,7 @@ DIS 계열은 좌대를 피규어와 한 덩어리로 자름. Tier 1 결과에�
 benchmarks/<pipeline-id>/<run-id>.json                      # 속도·성공/실패
 data/benchmark-results/<pipeline-id>/<run-id>/000000-<key>.png   # 투명 PNG
 data/debug/<run-id>/000000-<key>/                        # 마스크·품질 경고
+data/cache/<pipeline-id>/<fingerprint>/<sha256>/         # 처리 완료 결과 (재실행 시 추론 생략)
 data/compare/<stamp>/<compare-id>/
 ├── sheets/<key>.png           # 원본 | 모델 A | 모델 B ... (체크무늬 = 투명, 빨간 라벨 = 경고)
 ├── summary.json               # 모델별 run-id, latency, 경고 수
@@ -92,6 +93,20 @@ data/compare/<stamp>/<compare-id>/
 ```
 
 `<run-id>` = `YYYYMMDDTHHMMSSZ-<hash>`, `<compare-id>` = `YYYYMMDDTHHMMSSZ` (UTC).
+
+## 결과 캐시
+
+`bench` / `eval`은 처리한 이미지를 `data/cache/`에 디스크로 기록하고, 다음 실행에서 같은 항목은 추론 없이 결과를 복사한다.
+
+| 항목 | 규칙 |
+|---|---|
+| 키 | pipeline id + fingerprint + 입력 파일 sha256 (파일명·경로 무관) |
+| fingerprint | `FigureCutoutPipeline.version` + 컴포넌트 `name` 해시. 모델·후처리 변경 시 `version` 증가 필수 |
+| 완료 표시 | 항목 폴더 존재. 임시 폴더에 기록 후 rename — 중단 시 흔적 없음 |
+| 실패 | 캐시하지 않음 (다음 실행에서 재시도) |
+| 리포트 | `cache.hits` / `cache.misses`. `latency_ms`, throughput은 미적중(실제 추론)만 집계 |
+| 속도 측정 | `--no-cache` — 전 이미지 재추론 |
+| 초기화 | `rm -rf data/cache/<pipeline-id>` |
 
 ## 비교 절차
 

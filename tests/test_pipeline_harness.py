@@ -14,6 +14,7 @@ from figure_cutout.domain.models import Detection
 from figure_cutout.ml import factory as factory_module
 from figure_cutout.ml import rembg_adapter
 from figure_cutout.ml.factory import build_pipeline, list_pipelines
+from figure_cutout.ml.pipeline import FigureCutoutPipeline
 
 
 @pytest.fixture
@@ -78,6 +79,7 @@ def test_benchmark_writes_report_and_debug(dataset: Path, tmp_path: Path) -> Non
         result_root=tmp_path / "results",
         benchmark_root=tmp_path / "benchmarks",
         debug_root=tmp_path / "debug",
+        cache_root=tmp_path / "cache",
     )
     assert report["pipeline_id"] == "placeholder"
     assert report["dataset"] == "figure-v1"
@@ -101,6 +103,7 @@ def test_benchmark_records_failure_artifact(dataset: Path, tmp_path: Path) -> No
         result_root=tmp_path / "results",
         benchmark_root=tmp_path / "benchmarks",
         debug_root=tmp_path / "debug",
+        cache_root=tmp_path / "cache",
     )
     assert (report["success_count"], report["failure_count"]) == (2, 1)
     errors = list(Path(report["debug_dir"]).glob("*/error.json"))
@@ -109,6 +112,66 @@ def test_benchmark_records_failure_artifact(dataset: Path, tmp_path: Path) -> No
     assert error["sample_id"] == "sample-002"
     assert error["source"].endswith("sample-002.jpg")
     assert report["failures"][0]["sample_id"] == "sample-002"
+    # Failures are not cached, so they are retried on the next run.
+    assert len(list(Path(report["cache"]["dir"]).iterdir())) == 2
+
+
+def _bench(dataset: Path, tmp_path: Path, **kwargs: object) -> dict[str, object]:
+    return benchmark_pipeline(
+        "placeholder",
+        dataset,
+        result_root=tmp_path / "results",
+        benchmark_root=tmp_path / "benchmarks",
+        debug_root=tmp_path / "debug",
+        **{"cache_root": tmp_path / "cache", **kwargs},  # type: ignore[arg-type]
+    )
+
+
+def test_benchmark_reuses_cached_results(
+    dataset: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _bench(dataset, tmp_path)
+    assert (first["cache"]["hits"], first["cache"]["misses"]) == (0, 3)  # type: ignore[index]
+
+    def _no_inference(*_: object, **__: object) -> object:
+        raise AssertionError("cached image was re-processed")
+
+    monkeypatch.setattr(FigureCutoutPipeline, "run", _no_inference)
+    second = _bench(dataset, tmp_path)
+    assert (second["cache"]["hits"], second["cache"]["misses"]) == (3, 0)  # type: ignore[index]
+    assert (second["success_count"], second["failure_count"]) == (3, 0)
+
+    for before, after in zip(
+        sorted(Path(first["result_dir"]).iterdir()),  # type: ignore[arg-type]
+        sorted(Path(second["result_dir"]).iterdir()),  # type: ignore[arg-type]
+        strict=True,
+    ):
+        assert before.name == after.name
+        assert np.array_equal(np.asarray(Image.open(before)), np.asarray(Image.open(after)))
+
+    sample_dirs = sorted(Path(second["debug_dir"]).iterdir())  # type: ignore[arg-type]
+    metrics = json.loads((sample_dirs[0] / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["cache_hit"] is True
+    assert metrics["output"].endswith(f"{sample_dirs[0].name}.png")
+    for name in ("detection.json", "raw-mask.png", "refined-mask.png"):
+        assert (sample_dirs[0] / name).is_file()
+
+
+def test_benchmark_without_cache(dataset: Path, tmp_path: Path) -> None:
+    for _ in range(2):
+        report = _bench(dataset, tmp_path, cache_root=None)
+        assert (report["cache"]["hits"], report["cache"]["misses"]) == (0, 3)  # type: ignore[index]
+    assert not (tmp_path / "cache").exists()
+
+
+def test_pipeline_version_change_invalidates_cache(
+    dataset: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _bench(dataset, tmp_path)
+    monkeypatch.setattr(FigureCutoutPipeline, "version", "999.0.0")
+    second = _bench(dataset, tmp_path)
+    assert second["cache"]["fingerprint"] != first["cache"]["fingerprint"]  # type: ignore[index]
+    assert second["cache"]["misses"] == 3  # type: ignore[index]
 
 
 def test_eval_skips_pipeline_with_missing_dependency(

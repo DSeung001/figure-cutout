@@ -8,7 +8,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from figure_cutout.benchmark import benchmark_pipeline, eval_pipelines
+from figure_cutout.benchmark import DEFAULT_CACHE_ROOT, benchmark_pipeline, eval_pipelines
 from figure_cutout.compare import compare_runs
 from figure_cutout.dataset import init_export_dataset, prepare_eval_set
 from figure_cutout.ml.factory import DEFAULT_PIPELINE, build_pipeline, list_pipelines
@@ -22,6 +22,10 @@ def _print_json(payload: object) -> None:
 def _dataset(args: argparse.Namespace) -> Path:
     """Explicit --dataset, otherwise the newest export in $FIGURE_PROJECT_DIR/exports."""
     return args.dataset if args.dataset is not None else latest_export()
+
+
+def _cache_root(args: argparse.Namespace) -> Path | None:
+    return None if args.no_cache else DEFAULT_CACHE_ROOT
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -40,6 +44,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
         _dataset(args),
         split=args.split,
         write_debug=not args.no_debug,
+        cache_root=_cache_root(args),
     )
     _print_json(report)
     return 1 if report["failure_count"] else 0
@@ -53,6 +58,8 @@ def _summarize(report: dict[str, Any]) -> dict[str, Any]:
         "failure_count": report["failure_count"],
         "device": report["device"],
         "latency_ms_p50": report["latency_ms"]["p50"],
+        "cache_hits": report["cache"]["hits"],
+        "cache_misses": report["cache"]["misses"],
         "benchmark_path": report["benchmark_path"],
     }
     if report.get("skipped"):
@@ -67,6 +74,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         pipeline_ids=args.pipelines,
         split=args.split,
         write_debug=not args.no_debug,
+        cache_root=_cache_root(args),
     )
     _print_json({"dataset": str(dataset), "runs": [_summarize(report) for report in reports]})
     failed = any(report["failure_count"] for report in reports)
@@ -130,6 +138,11 @@ def build_parser() -> argparse.ArgumentParser:
     def add_bench_options(p: argparse.ArgumentParser) -> None:
         p.add_argument("--split", default="val")
         p.add_argument("--no-debug", action="store_true", help="Skip debug artifacts.")
+        p.add_argument(
+            "--no-cache",
+            action="store_true",
+            help="Re-run inference for every image; use for latency benchmarks.",
+        )
 
     run_parser = sub.add_parser("run", help="Cut out a single image.")
     run_parser.add_argument("input", type=Path)

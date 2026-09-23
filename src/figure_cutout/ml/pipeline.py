@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import asdict
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from figure_cutout.ml.contracts import Detector, MaskRefiner, QualityEvaluator, 
 
 
 class FigureCutoutPipeline:
+    # Bump when pipeline or component behavior changes: result caches are keyed on it.
     version = "0.1.0"
 
     def __init__(
@@ -25,6 +27,17 @@ class FigureCutoutPipeline:
         self.segmenter = segmenter
         self.refiner = refiner
         self.quality_evaluator = quality_evaluator
+
+    def fingerprint(self) -> str:
+        """Identity of this pipeline configuration; changes when version or any model changes."""
+        parts = [
+            self.version,
+            self.detector.name,
+            self.segmenter.name,
+            self.refiner.name,
+            self.quality_evaluator.name,
+        ]
+        return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:12]
 
     def run(
         self,
