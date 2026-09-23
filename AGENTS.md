@@ -27,6 +27,30 @@ Before changing ML pipeline behavior, model selection, benchmarking, datasets, o
 
 Follow the ML roadmap order. Do not introduce training or a custom backbone before pretrained baselines and failure analysis justify it.
 
+## Repository Layout
+
+```text
+figure-cutout/
+├── AGENTS.md                 # repository rules and routing
+├── docs/
+│   ├── architecture.md       # runtime structure
+│   ├── ml-roadmap.md         # model evaluation / training progression
+│   └── model-candidates.md   # candidate models, licenses, dataset/result layout
+├── src/figure_cutout/
+│   ├── api/                  # HTTP API (validation, jobs, status, delivery)
+│   ├── worker/               # long-lived GPU worker
+│   ├── domain/               # domain models and policies
+│   ├── ml/                   # contracts, adapters, pipeline, registry
+│   ├── storage/              # storage interface + implementations
+│   ├── benchmark.py
+│   ├── compare.py
+│   ├── dataset.py
+│   └── cli.py
+├── tests/
+├── benchmarks/               # benchmark JSON (generated, not committed)
+└── pyproject.toml
+```
+
 ## Product Scope
 
 Handle:
@@ -98,6 +122,14 @@ API responsibilities:
 
 Do not bind long-running GPU inference directly to the HTTP request lifecycle.
 
+The API process does not own GPU models.
+
+### ML Pipeline
+
+The ML pipeline must run standalone from the CLI, without the API or worker.
+
+Register new pipelines in `ml/factory.py` and document them in `docs/model-candidates.md`.
+
 ## Domain Policy
 
 ```text
@@ -138,6 +170,8 @@ Record:
 - throughput
 - peak VRAM when available
 - quality metrics when ground truth exists
+- device and runtime environment
+- debug artifact path
 
 Preferred quality metrics:
 
@@ -149,7 +183,18 @@ Preferred quality metrics:
 - base policy accuracy
 - accessory policy accuracy
 
-Preserve useful failure artifacts.
+Output locations:
+
+```text
+benchmarks/<pipeline-id>/<run-id>.json
+data/benchmark-results/<pipeline-id>/<run-id>/
+data/debug/<run-id>/
+data/compare/<dataset>/<compare-id>/
+```
+
+Compare every model or post-processing change against benchmark results on the same split.
+
+Preserve useful failure artifacts and corrected masks.
 
 ## Coding Rules
 
